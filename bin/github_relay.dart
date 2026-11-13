@@ -21,7 +21,7 @@ library;
 import 'dart:async';
 import 'dart:io';
 
-import 'package:is_github_relay/github_relay.dart';
+import 'package:is_github_relay/is_github_relay.dart';
 
 Future<void> main() async {
   final env = Platform.environment;
