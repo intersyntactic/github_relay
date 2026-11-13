@@ -1,0 +1,19 @@
+name: is_github_relay
+description: >
+  Receives GitHub webhooks on a public address and pushes "something changed"
+  to every intersyntactic server that dialled in over a websocket, so a
+  machine that nothing can reach (a laptop) still hears of a PR opening or
+  merging without asking GitHub.
+version: 0.1.0
+repository: https://github.com/intersyntactic/github_relay
+
+environment:
+  sdk: ^3.3.0
+
+dependencies:
+  checked_json: ^0.2.0
+  crypto: ^3.0.0
+
+dev_dependencies:
+  lints: ^6.1.0
+  test: ^1.33.0
