@@ -32,15 +32,17 @@ get a cert -- Caddy fails, the source goes dark. `intersyntactic-a8` and
 name is wanted (`github-relay.`, `teams-relay.`); the two deployments that
 actually exist right now are simpler than that anyway:
 
-- GitHub relay (this repo): `relay.intersyntactic.space` -- the bare name,
-  predating any of this naming discussion, unchanged.
+- GitHub relay (this repo): **`github.intersyntactic.space`**, matching
+  Teams' pattern below. `relay.intersyntactic.space` was this repo's
+  hostname until 2026-11-14 -- the generic pre-naming-discussion name,
+  caught after it had already gone live (see "status" at the end of this
+  doc) -- and is being retired, not repurposed.
 - Teams relay (`teams_module`): `teams.intersyntactic.space`, live since
   2026-11-14.
 
 Neither is named `<source>-relay`. Whatever a bus ends up being called, it
-needs a hostname that isn't `relay.intersyntactic.space` -- that name is
-already the GitHub relay's, not available to repurpose for something
-generic.
+needs its own hostname, not `github.intersyntactic.space` or
+`teams.intersyntactic.space` -- both are already a specific source's.
 
 ## The decision this doc assumes
 
@@ -58,7 +60,7 @@ Two shapes were on the table:
    already verified into a third thing that owns the listener fanout.
 
 **Chosen: (2).** This is also, independently, what already exists in
-production -- `relay.intersyntactic.space` and `teams.intersyntactic.space`
+production -- `github.intersyntactic.space` and `teams.intersyntactic.space`
 are two separate deployments today, built without a shared bus between
 them. The bus described below is the thing that's currently *missing* from
 an architecture that otherwise already committed to shape (2).
@@ -85,8 +87,8 @@ it.
 ## The bus
 
 A new, not-yet-built package/deployment (working name `intersyntactic_bus`;
-hostname not `relay.intersyntactic.space` -- see above, maybe
-`bus.intersyntactic.space`).
+hostname not `github.intersyntactic.space` or `teams.intersyntactic.space`
+-- see above, maybe `bus.intersyntactic.space`).
 
 It owns:
 
@@ -153,12 +155,23 @@ half of the migration is the only half.
 
 ## Status
 
-Not built. Two source relays exist in production right now with no bus
-between them -- this is a real gap, not a hypothetical one, and whether to
-close it now or later is Nick's call, not a decision this doc makes for
-him. What's settled is the shape it takes when built: separate deployments
-per source (already true), a bus that sits after witnessing (per the
-airlock constraint above), websocket on the publish side, and a thin
-non-parsing envelope. What's open: the bus's own hostname and package name,
-the airlock integration's exact shape, and whether `teams_relay.dart` needs
-touching regardless of when the bus itself gets built.
+**Deployment, 2026-11-14:** `relay.intersyntactic.space` (the old systemd
+binary, untraceable to any commit) was replaced the same day this doc's
+corrections were written, pinned to this repo's GHCR image by digest
+(`enspyrco/infra#371`). It then moved again, same day, to its correctly
+source-named hostname, `github.intersyntactic.space` -- caught only after
+the first switch had already gone live, which is why both names briefly
+served the same container during the transition. `relay.intersyntactic.space`
+is retired once `enspyrco/intersyntactic`'s webhook (hook `700598542`)
+points at `github.` and a real delivery has landed there.
+
+**The bus itself: not built.** Two source relays exist in production right
+now with no bus between them -- this is a real gap, not a hypothetical one,
+and whether to close it now or later is Nick's call, not a decision this
+doc makes for him. What's settled is the shape it takes when built:
+separate deployments per source (already true), a bus that sits after
+witnessing (per the airlock constraint above), websocket on the publish
+side, and a thin non-parsing envelope. What's open: the bus's own hostname
+and package name, the airlock integration's exact shape, and whether
+`teams_relay.dart` needs touching regardless of when the bus itself gets
+built.
