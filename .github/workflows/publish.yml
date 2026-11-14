@@ -61,31 +61,49 @@ jobs:
       # failure says something else, and only that case is let through.
       #
       # Three outcomes, not two, on the job's conclusion too: an existing
-      # tag is not a publish failure, it's "nothing to release" -- a push
-      # that didn't bump the version shouldn't go red on every later step
-      # skipping, or red stops meaning "something broke."
+      # tag that THIS commit built is not a publish failure, it's "nothing
+      # to release" -- a push that didn't bump the version shouldn't go red
+      # on every later step skipping, or red stops meaning "something
+      # broke." But an existing tag that some OTHER commit built means the
+      # code moved on without a version bump -- main and the published
+      # version would be two different APIs under one number -- and that
+      # must stay red, not skip quietly. The per-commit sha-<sha> tag is
+      # what tells those two cases apart: same digest as the version tag
+      # means this exact commit is what's already published.
       - name: Check whether this version tag already exists
         id: guard
         env:
           TAG: ${{ env.IMAGE }}:${{ steps.version.outputs.value }}
+          SHA_TAG: ${{ env.IMAGE }}:sha-${{ github.sha }}
         run: |
           set +e
           output=$(docker buildx imagetools inspect "$TAG" 2>&1)
           status=$?
           set -e
-          if [ "$status" -eq 0 ]; then
-            echo "::notice::$TAG already exists; nothing to publish." >&2
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if echo "$output" | grep -qi 'not found'; then
-            echo "$TAG is unused -- ok to publish."
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          else
+          if [ "$status" -ne 0 ]; then
+            if echo "$output" | grep -qi 'not found'; then
+              echo "$TAG is unused -- ok to publish."
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
             echo "::error::could not determine whether $TAG exists:" >&2
             echo "$output" >&2
             exit 1
           fi
+
+          version_digest=$(echo "$output" | awk '/^Digest:/ {print $2}')
+          set +e
+          sha_output=$(docker buildx imagetools inspect "$SHA_TAG" 2>&1)
+          sha_status=$?
+          set -e
+          sha_digest=$(echo "$sha_output" | awk '/^Digest:/ {print $2}')
+          if [ "$sha_status" -eq 0 ] && [ -n "$version_digest" ] && [ "$version_digest" = "$sha_digest" ]; then
+            echo "::notice::$TAG already published from this exact commit; nothing to do." >&2
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "::error::$TAG already exists but $SHA_TAG does not match it -- the code moved on without a version bump. Bump \"version\" in pubspec.yaml." >&2
+          exit 1
 
       # The OCI host is aarch64 while the runner is amd64. A single-arch
       # image pulls fine here and fails on the box with "no matching
