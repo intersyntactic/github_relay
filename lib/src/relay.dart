@@ -187,6 +187,11 @@ class Relay {
         RelayMessage(event: RelayEvent.parse(event), repo: repo).toJson());
   }
 
+  // The seam docs/bus-design.md describes: this whole method, plus
+  // _listen/_listeners/close()'s listener loop, is what moves out to a
+  // standalone bus the day a second source (e.g. Teams) is real. Nothing
+  // here is GitHub-specific; it's just GitHub-only because it is, today,
+  // the only source there is.
   void _broadcast(String message) {
     for (final s in _listeners.toList()) {
       try {
