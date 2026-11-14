@@ -183,7 +183,8 @@ class Relay {
       final j = jsonDecode(utf8.decode(body));
       repo = ((j as Map)['repository'] as Map?)?['full_name'] as String?;
     } catch (_) {}
-    return jsonEncode(RelayMessage(event: event, repo: repo).toJson());
+    return jsonEncode(
+        RelayMessage(event: RelayEvent.parse(event), repo: repo).toJson());
   }
 
   void _broadcast(String message) {
