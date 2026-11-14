@@ -4,7 +4,7 @@ description: >
   to every intersyntactic server that dialled in over a websocket, so a
   machine that nothing can reach (a laptop) still hears of a PR opening or
   merging without asking GitHub.
-version: 0.2.1
+version: 0.2.2
 repository: https://github.com/intersyntactic/github_relay
 
 environment:

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2
+
+- No behavior change. Corrects `docs/bus-design.md` and its pointers in
+  `README.md`/`lib/src/relay.dart`: a Teams relay is already live and
+  separately deployed (`teams.intersyntactic.space`), not a future
+  hypothetical, and hostnames must not contain `_` (Let's Encrypt refuses
+  the cert). Per `intersyntactic-a8`.
+
 ## 0.2.1
 
 - No behavior change. A comment in `lib/src/relay.dart` and docs

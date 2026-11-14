@@ -1,48 +1,92 @@
 # The bus: a design, not yet built
 
+**Corrected 2026-11-14, per `intersyntactic-a8`:** the first version of this
+doc assumed a second source was hypothetical and future. It isn't. A Teams
+relay (`teams_module`'s `bin/teams_relay.dart`) has been live on
+`enspyr-syd` since this morning, at `teams.intersyntactic.space` -- its own
+separate process and deployment, already the shape "the decision" below
+argues for. This doc is behind reality, not ahead of it; treat "why this
+isn't built yet" as the part most likely to be wrong.
+
 This repo currently plays two roles in one process: it verifies GitHub's
 webhook and it fans the result out to every listener on `/ws`. That second
 role -- `_listen`/`_listeners`/`_broadcast` in `lib/src/relay.dart` -- isn't
 actually GitHub-specific. It's a generic "one producer, many consumers"
-broadcast, and it's the part that has to change the day a second source
-(Microsoft Teams webhooks, most likely) shows up.
+broadcast. `teams_relay.dart` almost certainly duplicates it today, since it
+was built as its own separate process before this doc existed.
 
-`lib/src/webhook_gate.dart`'s own doc comment already anticipated this:
-"SOURCE-KEYED, NOT GITHUB-SHAPED. A `SourceSpec` per source, so another
-pusher can be added without a second gate." `gate()` takes `sourceName` and
-`SourceSpec` as parameters, not GitHub hardcoded, for exactly this reason.
-This doc is about the half of the system that hasn't caught up yet: the
-listener fanout, which today only exists inside this one GitHub-specific
-process.
+`lib/src/webhook_gate.dart`'s own doc comment anticipated the verification
+half of this: "SOURCE-KEYED, NOT GITHUB-SHAPED. A `SourceSpec` per source, so
+another pusher can be added without a second gate." `gate()` takes
+`sourceName` and `SourceSpec` as parameters, not GitHub hardcoded, for
+exactly this reason. This doc is about the half that verification doesn't
+cover: the listener fanout, which exists at least twice right now (once
+here, once in `teams_module`) with nothing shared between them.
+
+## Hostnames: no underscores
+
+Since CA/B Forum ballot SC12, Let's Encrypt refuses a certificate name
+containing `_`. A hostname like `github_relay.intersyntactic.space` cannot
+get a cert -- Caddy fails, the source goes dark. `intersyntactic-a8` and
+`infra-5e` hit this on `teams_relay.*` today. Use a hyphen if a compound
+name is wanted (`github-relay.`, `teams-relay.`); the two deployments that
+actually exist right now are simpler than that anyway:
+
+- GitHub relay (this repo): `relay.intersyntactic.space` -- the bare name,
+  predating any of this naming discussion, unchanged.
+- Teams relay (`teams_module`): `teams.intersyntactic.space`, live since
+  2026-11-14.
+
+Neither is named `<source>-relay`. Whatever a bus ends up being called, it
+needs a hostname that isn't `relay.intersyntactic.space` -- that name is
+already the GitHub relay's, not available to repurpose for something
+generic.
 
 ## The decision this doc assumes
 
 Two shapes were on the table:
 
 1. **One process, multiple routes.** A single deployed binary mounts
-   `/webhook/github` and (later) `/webhook/teams`, each its own handler with
-   its own `SourceSpec`, both broadcasting onto one in-memory `_listeners`
-   set. Free -- no new service, no new auth, no new failure mode -- but it
-   means `github_relay` and a future `teams_relay` can't be deployed,
-   restarted, or scaled independently, and doesn't fit two separately-named
-   subdomains.
+   `/webhook/github` and `/webhook/teams`, each its own handler with its own
+   `SourceSpec`, both broadcasting onto one in-memory `_listeners` set.
+   Free -- no new service, no new auth, no new failure mode -- but it means
+   the GitHub and Teams relays can't be deployed, restarted, or scaled
+   independently, and doesn't fit two separately-named subdomains.
 
-2. **Separate processes, one shared bus.** `github_relay` and a future
-   `teams_relay` are independent deployments, each with its own subdomain,
-   each pushing what it already verified into a third thing that owns the
-   listener fanout.
+2. **Separate processes, one shared bus.** Each source relay is an
+   independent deployment, each with its own subdomain, each pushing what it
+   already verified into a third thing that owns the listener fanout.
 
-**Chosen: (2).** `github_relay.intersyntactic.space` is this repo's own
-subdomain specifically because a second source gets its own subdomain too,
-not a path on this one. That decision is what makes a shared bus necessary
-in the first place -- it's a cost taken on deliberately, not a requirement
-`gate()`'s design forced.
+**Chosen: (2).** This is also, independently, what already exists in
+production -- `relay.intersyntactic.space` and `teams.intersyntactic.space`
+are two separate deployments today, built without a shared bus between
+them. The bus described below is the thing that's currently *missing* from
+an architecture that otherwise already committed to shape (2).
+
+## The airlock: where the bus has to sit
+
+Nick, 2026-11-14: Teams arrivals must be witnessed by the airlock before
+anything reads them. The Teams relay answers Teams `200` only after the
+airlock has recorded the raw body. The airlock is becoming its own service
+on the box (`airlock-a1`; see `is_airlock_api`).
+
+This constrains the bus directly: **a bus that fans a raw event out to
+listeners before the airlock has witnessed it breaks that rule.** The bus
+cannot sit between a source relay and the airlock -- it has to sit at or
+after the point where the airlock has already recorded the raw body,
+fanning out what was witnessed, not what arrived. Whether that means the
+airlock publishes to the bus (airlock as the only thing with a publisher
+token) or the bus itself calls into the airlock to witness before
+broadcasting is not decided here -- find out from whoever is building
+`airlock-a1` and `is_airlock_api` before designing the publish side further;
+this doc does not have enough knowledge of the airlock's own shape to settle
+it.
 
 ## The bus
 
-A new, not-yet-built package/deployment (working name `intersyntactic_bus`,
-working hostname `relay.intersyntactic.space` -- freed up by this repo's
-move to its own subdomain).
+A new, not-yet-built package/deployment (working name `intersyntactic_bus`;
+hostname not `relay.intersyntactic.space` -- see above, maybe
+`bus.intersyntactic.space`).
 
 It owns:
 
@@ -50,12 +94,12 @@ It owns:
   out of `Relay` wholesale. A listener (IS, wherever it runs) dials in with
   `Authorization: Bearer <listener-token>`, exactly as it does today.
 - `/publish`: new, and **also a websocket upgrade, not an HTTP POST.** A
-  source relay (`github_relay`, later `teams_relay`) dials in with
-  `Authorization: Bearer <publisher-token>` and holds the connection open,
-  writing a message onto it whenever its own gate says to. This mirrors
+  source relay dials in with `Authorization: Bearer <publisher-token>` and
+  holds the connection open, writing a message onto it whenever its own
+  gate (or, for Teams, the airlock -- see above) says to. This mirrors
   `/ws`'s own check-token-then-upgrade shape exactly (the same
   `constantTimeEquals` pattern, the same `WebSocketTransformer.upgrade`),
-  and lets `github_relay`'s side reuse whatever reconnect-with-backoff
+  and lets a source relay's side reuse whatever reconnect-with-backoff
   client code `relay_client.dart` already has for listeners -- a relay
   becomes a client of the bus the same way IS is a client of the bus, just
   writing instead of reading.
@@ -70,25 +114,27 @@ It owns:
   **The bus decides `source` from which token authenticated a connection,
   never from a field the message claims.** Same principle `webhook_gate.dart`
   already applies to signatures -- ask once, at the boundary, trust nothing
-  self-reported. A leaked `github_relay` token must never be usable to forge
-  a `teams` event.
+  self-reported. A leaked GitHub-relay token must never be usable to forge
+  a Teams event.
 
 - Nothing else. The bus does not parse the payload. It wraps whatever bytes
-  a source relay already produced (today's `RelayMessage.toJson()`,
-  unchanged) in a thin envelope -- `{"source": "github", "message": {...}}`
-  -- and forwards that, unexamined, to every listener. It does not debounce:
-  `relay.dart`'s existing stance ("COALESCING is not done here... the
-  receiver's own topic debounce does the coalescing") holds just as well
-  with a bus in front as it did without one.
+  a source relay already produced (today's `RelayMessage.toJson()` for
+  GitHub, unchanged) in a thin envelope -- `{"source": "github", "message":
+  {...}}` -- and forwards that, unexamined, to every listener. It does not
+  debounce: `relay.dart`'s existing stance ("COALESCING is not done here...
+  the receiver's own topic debounce does the coalescing") holds just as
+  well with a bus in front as it did without one.
 
 Fire-and-forget on the publish side, same as today's `_broadcast`: no retry
 queue, no ack. A dropped notification recovers itself the same way a dropped
 listener write already does -- the next real event, or GitHub's/Teams' own
 redelivery, catches it up. This matches `webhook_gate.dart`'s existing
 tolerance for a replayed-but-idempotent trigger; nothing here raises the bar
-on reliability past what the rest of the system already accepts.
+on reliability past what the rest of the system already accepts. (This
+tolerance is about redelivery, not about skipping the airlock's witness --
+see above.)
 
-## What changes in this repo, when that day comes
+## What changes in this repo, when the bus is built
 
 `lib/src/relay.dart`'s `Relay` loses `_listen`, `_listeners`, `_broadcast`,
 the `/ws` route, `close()`'s listener-closing loop, and the `listeners`
@@ -100,16 +146,19 @@ is untouched.
 
 Every current listener's wire format changes -- `{source, message}` instead
 of a bare `RelayMessage` at the top level -- which is why this is a real
-migration, not a config flag.
+migration, not a config flag. `teams_module`'s relay presumably needs the
+equivalent change, and whatever it does today instead of a shared bus
+(its own `/ws`? something else?) needs checking before assuming this repo's
+half of the migration is the only half.
 
-## Why this isn't built yet
+## Status
 
-There is still exactly one source. Building the bus now would be paying for
-a second source that doesn't exist, against an auth/envelope shape that
-hasn't been tested against what Teams' webhooks actually look like.
-`SourceSpec`/`gate()` already proved the cheap part (multi-source
-verification) could be anticipated without the bus needing to exist first;
-extracting `_listeners`/`_broadcast` into a standalone service is mechanical
-and low-risk whenever a second source becomes real, not before. This doc
-exists so that whoever does it then doesn't have to re-derive the reasoning
-above from scratch.
+Not built. Two source relays exist in production right now with no bus
+between them -- this is a real gap, not a hypothetical one, and whether to
+close it now or later is Nick's call, not a decision this doc makes for
+him. What's settled is the shape it takes when built: separate deployments
+per source (already true), a bus that sits after witnessing (per the
+airlock constraint above), websocket on the publish side, and a thin
+non-parsing envelope. What's open: the bus's own hostname and package name,
+the airlock integration's exact shape, and whether `teams_relay.dart` needs
+touching regardless of when the bus itself gets built.

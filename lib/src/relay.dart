@@ -189,9 +189,11 @@ class Relay {
 
   // The seam docs/bus-design.md describes: this whole method, plus
   // _listen/_listeners/close()'s listener loop, is what moves out to a
-  // standalone bus the day a second source (e.g. Teams) is real. Nothing
-  // here is GitHub-specific; it's just GitHub-only because it is, today,
-  // the only source there is.
+  // standalone bus -- a real gap today, not a hypothetical one, since
+  // teams_module's relay is already a second, separate deployment with no
+  // bus shared between it and this one. Nothing here is GitHub-specific;
+  // it's just GitHub-only because this relay has never been wired to
+  // anything else.
   void _broadcast(String message) {
     for (final s in _listeners.toList()) {
       try {
