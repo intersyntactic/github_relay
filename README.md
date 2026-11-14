@@ -44,6 +44,12 @@ See `bin/github_relay.dart`'s doc comment for the environment variables.
 `0.0.0.0:8085` inside the container; put TLS in front of it, since GitHub
 needs https and the listener token travels in a header.
 
+A bare `POST /webhook/github` with no `x-github-event` header gets `204`,
+unverified -- by design, matching GitHub's own `event` header dispatch, not
+a bug. A liveness probe that sends a bare POST will read as healthy without
+exercising the signature check at all; probe with `X-GitHub-Event: ping`
+plus a correctly signed empty body if the check itself needs exercising.
+
 ## A second source (Teams is already live)
 
 This relay's listener fanout (`/ws`, `_listeners`, `_broadcast` in
