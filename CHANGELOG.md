@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1
+
+- No behavior change. A comment in `lib/src/relay.dart` and docs
+  (`docs/bus-design.md`, `README.md`) now point at the bus design for a
+  second webhook source. The guard added in 0.2.0 correctly caught this as
+  "lib/ changed, version didn't bump" and refused to publish 0.2.0 again
+  under a different commit -- this version exists to satisfy that guard,
+  not because anything here behaves differently.
+
 ## 0.2.0
 
 - **Breaking:** `RelayMessage.event` is now a `RelayEvent` (a sealed class),
