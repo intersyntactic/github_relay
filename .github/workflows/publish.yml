@@ -59,7 +59,13 @@ jobs:
       # published anyway. `imagetools inspect` says "not found" in its own
       # text only for a tag that is genuinely absent; a transport or auth
       # failure says something else, and only that case is let through.
-      - name: Refuse to overwrite an existing version tag
+      #
+      # Three outcomes, not two, on the job's conclusion too: an existing
+      # tag is not a publish failure, it's "nothing to release" -- a push
+      # that didn't bump the version shouldn't go red on every later step
+      # skipping, or red stops meaning "something broke."
+      - name: Check whether this version tag already exists
+        id: guard
         env:
           TAG: ${{ env.IMAGE }}:${{ steps.version.outputs.value }}
         run: |
@@ -68,11 +74,13 @@ jobs:
           status=$?
           set -e
           if [ "$status" -eq 0 ]; then
-            echo "::error::$TAG already exists. Bump \"version\" in pubspec.yaml." >&2
-            exit 1
+            echo "::notice::$TAG already exists; nothing to publish." >&2
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
           if echo "$output" | grep -qi 'not found'; then
             echo "$TAG is unused -- ok to publish."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
           else
             echo "::error::could not determine whether $TAG exists:" >&2
             echo "$output" >&2
@@ -83,10 +91,13 @@ jobs:
       # image pulls fine here and fails on the box with "no matching
       # manifest" -- a failure the "verify" step below turns into a red
       # build instead.
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
+      - if: steps.guard.outputs.skip != 'true'
+        uses: docker/setup-qemu-action@v3
+      - if: steps.guard.outputs.skip != 'true'
+        uses: docker/setup-buildx-action@v3
 
       - name: Build and push
+        if: steps.guard.outputs.skip != 'true'
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -102,6 +113,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Verify the published manifest covers the deploy target
+        if: steps.guard.outputs.skip != 'true'
         env:
           TAG: ${{ env.IMAGE }}:${{ steps.version.outputs.value }}
         run: |
@@ -111,6 +123,7 @@ jobs:
           echo "arm64 present."
 
       - name: Summary
+        if: steps.guard.outputs.skip != 'true'
         run: |
           {
             echo "### Published"
