@@ -1,19 +1,21 @@
 name: is_github_relay
-description: >
-  Receives GitHub webhooks on a public address and pushes "something changed"
-  to every intersyntactic server that dialled in over a websocket, so a
-  machine that nothing can reach (a laptop) still hears of a PR opening or
-  merging without asking GitHub.
-version: 0.2.2
+description: >-
+  GitHub's part of an is_relay relay: the HMAC check of a webhook delivery,
+  the key the docking station decides it under, and the sweep that asks
+  GitHub to redeliver what failed, since GitHub never does by itself.
+version: 0.3.0
 repository: https://github.com/intersyntactic/github_relay
 
 environment:
-  sdk: ^3.3.0
+  sdk: ^3.13.0
 
 dependencies:
-  checked_json: ^0.2.0
-  crypto: ^3.0.0
+  checked_json: ^0.2.1
+  crypto: ^3.0.3
+  is_docking_station_api: ^0.4.0
+  is_relay: ^0.1.0
 
 dev_dependencies:
+  is_logbook_client: ^0.3.0
   lints: ^6.1.0
   test: ^1.33.0

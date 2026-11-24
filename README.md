@@ -1,62 +1,64 @@
 # is_github_relay
 
-The meeting point between GitHub and a machine nothing can reach.
+GitHub's part of an [is_relay](https://pub.dev/packages/is_relay) relay.
+is_relay's `RelayServer` takes each webhook delivery, runs this package's
+check against the raw bytes, records every authentic one in the logbook as
+`github-event`, and answers 2xx only after that write. Readers get
+deliveries from the logbook; nothing is pushed to anyone. See is_relay's
+[DESIGN.md](https://github.com/intersyntactic/relay/blob/main/DESIGN.md)
+for why.
 
-GitHub POSTs `/webhook/github` to wherever this is deployed; each server
-that has dialled `/ws` (outbound from its side, so no inbound port on a
-laptop) is told that something changed. Nothing here asks GitHub anything
-and nothing polls: the only timer is the websocket ping that notices a dead
-connection.
+This package supplies:
+
+- **`GitHubDeliveryCheck`**: the HMAC-SHA256 of the raw body under the
+  webhook secret, compared in constant time with `X-Hub-Signature-256`. It
+  reads no other header. `X-GitHub-Event` and `X-GitHub-Delivery` are not
+  covered by the signature, so a replayer could relabel a signed body with
+  them; the translator classifies a delivery from its signed bytes alone,
+  and gives `NothingToAdmit` for any shape it can't classify unambiguously.
+- **`githubEventKey`**: the key the docking station decides a delivery
+  under, `sha256:<hex of the bytes>`. A redelivery is the same bytes, so the
+  relay keeps no record of what it has seen.
+- **`RedeliverySweep`**: GitHub never redelivers a failed webhook by
+  itself. The sweep lists each hook's last 71 hours of attempts and asks
+  GitHub to redeliver each delivery that no attempt delivered: on every
+  pass after an answer that asked for another try (no answer, 408, 429,
+  5xx), and sparingly after any other 4xx (three attempts in all, an hour
+  apart). The sweep sees only the status, so it can't tell the relay's 404
+  from a misrouted proxy's, and a 401 during a secret rotation is the
+  config at fault, not the delivery. Redelivering is safe however often:
+  the same bytes are the same event key.
 
 ```dart
-import 'package:is_github_relay/is_github_relay.dart';
-
-final relay = Relay(
-  secret: Platform.environment['GITHUB_WEBHOOK_SECRET']!,
-  token: Platform.environment['RELAY_TOKEN']!,
+final relay = RelayServer(
+  check: GitHubDeliveryCheck(secret: GitHubWebhookSecret.parse(secret)!),
+  logbook: LogbookSocket.parse('/run/logbook/write.sock')!,
+  path: githubRelayPath,
+  budget: githubRelayBudget, // 8 s, inside GitHub's 10 s
+  maxBodyBytes: githubMaxBodyBytes, // GitHub's own 25 MB cap
+  rate: WriteRateBound(perMinute: 300, burst: 60),
 );
-final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 8080);
-await for (final req in server) {
-  unawaited(relay.handle(req));
-}
+await relay.serve(await HttpServer.bind(InternetAddress.loopbackIPv4, 8080));
 ```
-
-## The pushed message
-
-A pushed websocket frame is `{"event":"pull_request","repo":"owner/name"}`,
-typed as `RelayMessage` (`RelayMessage.fromJson`/`toJson`). `event` is kept
-raw alongside its typed reading, `RelayMessage.kind` (`RelayEventKind`),
-because `WAKE_EVENTS` may be configured to push a kind this build does not
-know; a receiver should treat a null `kind` the same as a reconnect --
-"something may have changed, re-read everything" -- never fall through to
-acting on the raw string.
-
-The event kind comes from GitHub's `x-github-event` header, which is NOT
-covered by the request signature. A receiver may use it only to pick which
-list to re-read, never to decide what the delivery's contents mean -- see
-the comment on `gate` in `lib/src/webhook_gate.dart` for why, and what would
-have to change first.
 
 ## Running it
 
-See `bin/github_relay.dart`'s doc comment for the environment variables.
-`Dockerfile` builds a static binary onto `FROM scratch`, binding
-`0.0.0.0:8085` inside the container; put TLS in front of it, since GitHub
-needs https and the listener token travels in a header.
+Two processes from one image (`Dockerfile`):
 
-A bare `POST /webhook/github` with no `x-github-event` header gets `204`,
-unverified -- by design, matching GitHub's own `event` header dispatch, not
-a bug. A liveness probe that sends a bare POST will read as healthy without
-exercising the signature check at all; probe with `X-GitHub-Event: ping`
-plus a correctly signed empty body if the check itself needs exercising.
+- `bin/github_relay.dart`, the relay. It needs `GITHUB_WEBHOOK_SECRET` and
+  `LOGBOOK_SOCKET`, and the logbook's sender table must let its user write
+  `github-event`. Put TLS in front, with a proxy that times out header reads
+  and logs neither headers nor bodies: GitHub signs no time, so a body
+  captured before it reached the relay is accepted once whenever it is sent.
+- `bin/github_redelivery_sweep.dart`, the sweep, started with
+  `--entrypoint /app/bin/github_redelivery_sweep`. It needs `GITHUB_TOKEN`
+  and `GITHUB_HOOKS`. It holds a GitHub token, so it never shares the
+  relay's process.
 
-## A second source (Teams is already live)
+Each file's doc comment lists its environment variables. Missing or invalid
+configuration aborts with exit 78 rather than serve an endpoint that waves
+everyone in.
 
-This relay's listener fanout (`/ws`, `_listeners`, `_broadcast` in
-`lib/src/relay.dart`) is GitHub-adjacent only because it was built before a
-second source existed. A Teams relay (`teams_module`) is a separate
-deployment at `teams.intersyntactic.space`, with no bus shared between it
-and this one. `lib/src/webhook_gate.dart`'s `gate()` is already
-source-keyed, not GitHub-shaped; the fanout isn't yet. See
-`docs/bus-design.md` for the design of what closes that gap, including a
-constraint from the airlock that any such design has to sit behind.
+The webhook: payload URL `https://<host>/webhook/github`, content type
+`application/json`, any events. Every authentic delivery is recorded, so
+"send me everything" costs logbook entries, not correctness.

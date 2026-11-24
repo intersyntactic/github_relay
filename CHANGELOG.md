@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.0
+
+- **Breaking:** moves onto [is_relay](https://pub.dev/packages/is_relay).
+  The relay is now is_relay's `RelayServer` with `GitHubDeliveryCheck`: it
+  records every delivery whose HMAC holds in the logbook as `github-event`,
+  and answers 2xx only after the write.
+- **Breaking:** the `/ws` fan-out is gone, with `Relay`, `RelayMessage`,
+  `RelayEvent`, `RELAY_TOKEN` and `WAKE_EVENTS`. Readers get deliveries from
+  the logbook. `webhook_gate.dart` is gone too: no wake filter, no debounce,
+  and no unsigned header is read.
+- `githubEventKey`: the sha256 of a delivery's bytes, the key the docking
+  station decides it under.
+- `RedeliverySweep` and `bin/github_redelivery_sweep.dart`: GitHub never
+  redelivers a failed delivery by itself, so the sweep asks it to. Its own
+  process, from the same image.
+- The relay now needs `LOGBOOK_SOCKET`. The SDK floor is 3.13.
+
 ## 0.2.2
 
 - No behavior change. Corrects `docs/bus-design.md` and its pointers in
