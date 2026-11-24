@@ -131,6 +131,9 @@ abstract interface class ListsAndRedeliversHookDeliveries {
 
 /// For each delivery among [attempts] that none delivered, its latest
 /// attempt, when that attempt's answer asked for another try.
+///
+/// Oldest delivery first, by its first attempt: that one is nearest the
+/// end of the time GitHub will still redeliver it.
 List<HookDeliveryAttempt> attemptsToRedeliver(
   Iterable<HookDeliveryAttempt> attempts,
 ) {
@@ -138,14 +141,18 @@ List<HookDeliveryAttempt> attemptsToRedeliver(
   for (final a in attempts) {
     (byGuid[a.guid] ??= []).add(a);
   }
-  return [
+  final due = [
     for (final tries in byGuid.values)
       if (!tries.any((t) => t.outcome == AttemptOutcome.delivered))
         if (_latest(tries) case final last
             when last.outcome == AttemptOutcome.worthAnotherTry)
-          last,
-  ];
+          (first: _first(tries), last: last),
+  ]..sort((a, b) => a.first.compareTo(b.first));
+  return [for (final d in due) d.last];
 }
+
+DateTime _first(List<HookDeliveryAttempt> tries) =>
+    tries.map((t) => t.deliveredAt).reduce((a, b) => a.isBefore(b) ? a : b);
 
 HookDeliveryAttempt _latest(List<HookDeliveryAttempt> tries) => tries.reduce(
   (a, b) => switch (a.deliveredAt.compareTo(b.deliveredAt)) {
@@ -174,9 +181,11 @@ final class RedeliverySweep {
   /// delivered in the last 3 days, so this stays inside that.
   final Duration window;
 
-  /// The most redeliveries asked for in one pass, across every hook. After
-  /// an outage the relay's write-rate bound would refuse a flood of them;
-  /// the rest wait for the next pass.
+  /// The most redeliveries GitHub accepts in one pass, across every hook.
+  /// After an outage the relay's write-rate bound would refuse a flood of
+  /// them; the rest wait for the next pass. One GitHub refuses doesn't
+  /// count, so a delivery it will no longer redeliver can't hold the
+  /// others back.
   final int maxPerSweep;
 
   /// One line per hook and per redelivery: ids and statuses, never content.
@@ -205,7 +214,7 @@ final class RedeliverySweep {
         'sweep $hook: ${attempts.length} attempt(s), ${due.length} to redeliver',
       );
       for (final a in due) {
-        if (redelivered + failed >= maxPerSweep) {
+        if (redelivered >= maxPerSweep) {
           log('sweep: $maxPerSweep asked for this pass; the rest wait');
           return (redelivered: redelivered, failed: failed);
         }

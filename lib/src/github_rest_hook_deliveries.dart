@@ -48,6 +48,7 @@ final class GitHubRestHookDeliveries
     HttpClient? client,
     this.timeout = const Duration(seconds: 30),
     this.maxPages = 50,
+    this.log = _stderr,
   }) : api = api ?? Uri.parse('https://api.github.com'),
        _client = client ?? HttpClient();
 
@@ -58,6 +59,11 @@ final class GitHubRestHookDeliveries
 
   /// The most pages of 100 read per listing.
   final int maxPages;
+
+  /// Says when a listing was cut short.
+  final void Function(String line) log;
+
+  static void _stderr(String line) => stderr.writeln(line);
 
   final GitHubToken _token;
   final HttpClient _client;
@@ -83,6 +89,12 @@ final class GitHubRestHookDeliveries
         attempts.add(a);
       }
       next = _sameOrigin(_nextPage(link));
+    }
+    if (next != null) {
+      log(
+        'listing $hook: stopped at $maxPages pages; '
+        'older attempts are not swept this pass',
+      );
     }
     return attempts;
   }

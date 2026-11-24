@@ -133,6 +133,16 @@ void main() {
       expect(due, isEmpty);
     });
 
+    test('oldest delivery first, by its first attempt', () {
+      final due = attemptsToRedeliver([
+        attempt(9, 'new', 503, ago: const Duration(minutes: 1)),
+        attempt(8, 'old', 503, ago: const Duration(minutes: 2)),
+        attempt(2, 'old', 503, ago: const Duration(hours: 60)),
+        attempt(5, 'mid', 0, ago: const Duration(hours: 5)),
+      ]);
+      expect(due.map((a) => a.guid), ['old', 'mid', 'new']);
+    });
+
     test('none whose latest answer refused it', () {
       final due = attemptsToRedeliver([
         attempt(1, 'a', 503, ago: const Duration(minutes: 20)),
@@ -201,6 +211,14 @@ void main() {
       });
       final result = await sweepOf(github, maxPerSweep: 2).sweep();
       expect(result, (redelivered: 2, failed: 0));
+    });
+
+    test('a redelivery GitHub refuses takes no room in the pass', () async {
+      final github = _FakeGitHub({
+        '$hook': [for (var i = 1; i <= 5; i++) attempt(i, 'g$i', 503)],
+      })..failRedelivery.addAll([1, 2, 3]);
+      final result = await sweepOf(github, maxPerSweep: 2).sweep();
+      expect(result, (redelivered: 2, failed: 3));
     });
 
     test('logs ids and statuses, never a token', () async {
@@ -304,6 +322,33 @@ void main() {
       );
       expect(got, hasLength(1));
       expect(seen, hasLength(1));
+    });
+
+    test('says so when it stops at maxPages', () async {
+      final base = 'http://127.0.0.1:${api.port}';
+      final lines = <String>[];
+      final capped = GitHubRestHookDeliveries(
+        token: token,
+        api: Uri.parse(base),
+        maxPages: 1,
+        log: lines.add,
+      );
+      answer = (req) {
+        req.response.headers.set(
+          'link',
+          '<$base${req.uri.path}?cursor=v1_2>; rel="next"',
+        );
+        req.response.write(
+          jsonEncode([wire(1, 'a', 503, const Duration(minutes: 1))]),
+        );
+      };
+      final got = await capped.attemptsSince(
+        hook,
+        now.subtract(const Duration(hours: 71)),
+      );
+      capped.close();
+      expect(got, hasLength(1));
+      expect(lines.single, contains('stopped at 1 pages'));
     });
 
     test('throws on a listing GitHub refuses', () async {
