@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:is_github_relay/is_github_relay.dart';
+import 'package:is_relay/is_relay.dart' show RefusalStatus;
 import 'package:test/test.dart';
 
 final now = DateTime.utc(2026, 11, 24, 12);
@@ -107,9 +108,29 @@ void main() {
       }
     });
 
-    test('any other 4xx refused it', () {
+    test('a refusal follows is_relay: final ones are refused', () {
       for (final s in [400, 401, 403, 404, 405, 413]) {
         expect(AttemptOutcome.of(s), AttemptOutcome.refused, reason: '$s');
+      }
+      for (final r in RefusalStatus.values) {
+        expect(
+          AttemptOutcome.of(r.code),
+          r.worthAnotherTry
+              ? AttemptOutcome.worthAnotherTry
+              : AttemptOutcome.refused,
+          reason: '${r.code}',
+        );
+      }
+    });
+
+    test('a status no relay refuses with asks for another try', () {
+      // The relay never sends these, so they say nothing about the delivery.
+      for (final s in [301, 402, 418, 421]) {
+        expect(
+          AttemptOutcome.of(s),
+          AttemptOutcome.worthAnotherTry,
+          reason: '$s',
+        );
       }
     });
   });
