@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0
+
+- Onto is_relay `^0.2.0`. `AttemptOutcome.of` reads is_relay's
+  `RefusalStatus.ofCode(status)?.worthAnotherTry` instead of its own list
+  of statuses. A status no relay refuses with (no answer, or one the proxy
+  gave itself) is worth another try, so a 4xx the relay never sends, such
+  as 402 or 418, is now retried every pass rather than sparingly.
+- **Breaking:** `constantTimeEquals` is no longer exported from here; it
+  is is_relay's.
+
 ## 0.3.0
 
 - **Breaking:** moves onto [is_relay](https://pub.dev/packages/is_relay).

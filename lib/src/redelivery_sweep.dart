@@ -15,6 +15,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:checked_json/checked_json.dart';
+import 'package:is_relay/is_relay.dart' show RefusalStatus;
 
 /// A webhook whose deliveries are swept: a repository's or an
 /// organisation's.
@@ -72,22 +73,24 @@ enum AttemptOutcome {
   /// A 2xx: the relay recorded it.
   delivered,
 
-  /// No answer (GitHub's status 0, a timeout or a refused connection), a
-  /// 408, a 429 or a 5xx: the relay asked for it again.
+  /// A refusal the relay marks [RefusalStatus.worthAnotherTry], or a status
+  /// no relay refuses with: no answer (GitHub's status 0), or one the proxy
+  /// gave itself, such as a 502.
   worthAnotherTry,
 
-  /// Any other 4xx: the relay means it as final (a signature that doesn't
-  /// hold, a wrong path). But the sweep sees only the number, so it can't
-  /// tell the relay's 404 from a misrouted proxy's, and a 401 during a
-  /// secret rotation is the relay's config being wrong, not the delivery.
-  /// So these are tried again too, sparingly: see [attemptsToRedeliver].
+  /// A refusal the relay means as final (a signature that doesn't hold, a
+  /// wrong path). But the sweep sees only the number, so it can't tell the
+  /// relay's 404 from a misrouted proxy's, and a 401 during a secret
+  /// rotation is the relay's config being wrong, not the delivery. So these
+  /// are tried again too, sparingly: see [attemptsToRedeliver].
   refused;
 
   static AttemptOutcome of(int status) => switch (status) {
     >= 200 && < 300 => delivered,
-    408 || 429 => worthAnotherTry,
-    >= 400 && < 500 => refused,
-    _ => worthAnotherTry,
+    _ =>
+      RefusalStatus.ofCode(status)?.worthAnotherTry ?? true
+          ? worthAnotherTry
+          : refused,
   };
 }
 
