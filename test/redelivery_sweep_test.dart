@@ -107,7 +107,7 @@ void main() {
       }
     });
 
-    test('any other 4xx refused it for good', () {
+    test('any other 4xx refused it', () {
       for (final s in [400, 401, 403, 404, 405, 413]) {
         expect(AttemptOutcome.of(s), AttemptOutcome.refused, reason: '$s');
       }
@@ -115,8 +115,12 @@ void main() {
   });
 
   group('which attempts are redelivered', () {
+    List<HookDeliveryAttempt> redeliverable(
+      List<HookDeliveryAttempt> attempts,
+    ) => attemptsToRedeliver(attempts, now: now);
+
     test('a failed delivery, once, by its latest attempt', () {
-      final due = attemptsToRedeliver([
+      final due = redeliverable([
         attempt(3, 'a', 503, ago: const Duration(minutes: 1)),
         attempt(1, 'a', 0, ago: const Duration(minutes: 20)),
         attempt(2, 'a', 503, ago: const Duration(minutes: 10)),
@@ -125,7 +129,7 @@ void main() {
     });
 
     test('none of a delivery that any attempt delivered', () {
-      final due = attemptsToRedeliver([
+      final due = redeliverable([
         attempt(1, 'a', 503, ago: const Duration(minutes: 20)),
         attempt(2, 'a', 200, ago: const Duration(minutes: 10)),
         attempt(3, 'a', 503, ago: const Duration(minutes: 1)),
@@ -134,7 +138,7 @@ void main() {
     });
 
     test('oldest delivery first, by its first attempt', () {
-      final due = attemptsToRedeliver([
+      final due = redeliverable([
         attempt(9, 'new', 503, ago: const Duration(minutes: 1)),
         attempt(8, 'old', 503, ago: const Duration(minutes: 2)),
         attempt(2, 'old', 503, ago: const Duration(hours: 60)),
@@ -143,16 +147,45 @@ void main() {
       expect(due.map((a) => a.guid), ['old', 'mid', 'new']);
     });
 
-    test('none whose latest answer refused it', () {
-      final due = attemptsToRedeliver([
-        attempt(1, 'a', 503, ago: const Duration(minutes: 20)),
-        attempt(2, 'a', 401, ago: const Duration(minutes: 10)),
-      ]);
-      expect(due, isEmpty);
+    test('a refused one, once its latest attempt is an hour old', () {
+      // A 401 during a secret rotation, or a proxy's 404 mid-deploy.
+      expect(
+        redeliverable([attempt(1, 'a', 401, ago: const Duration(minutes: 59))]),
+        isEmpty,
+      );
+      expect(
+        redeliverable([
+          attempt(1, 'a', 503, ago: const Duration(hours: 3)),
+          attempt(2, 'a', 401, ago: const Duration(hours: 1)),
+        ]).map((a) => a.id),
+        [2],
+      );
+    });
+
+    test('a refused one, no more after three attempts in all', () {
+      expect(
+        redeliverable([
+          attempt(1, 'a', 404, ago: const Duration(hours: 5)),
+          attempt(2, 'a', 404, ago: const Duration(hours: 3)),
+          attempt(3, 'a', 404, ago: const Duration(hours: 1)),
+        ]),
+        isEmpty,
+      );
+    });
+
+    test('a refused one is tried again only on the latest answer', () {
+      // A 503 after a 401 is due every pass again, not capped.
+      expect(
+        redeliverable([
+          for (var i = 1; i <= 5; i++)
+            attempt(i, 'a', i == 1 ? 401 : 503, ago: Duration(minutes: 60 - i)),
+        ]).map((a) => a.id),
+        [5],
+      );
     });
 
     test('each failed delivery on its own', () {
-      final due = attemptsToRedeliver([
+      final due = redeliverable([
         attempt(1, 'a', 503),
         attempt(2, 'b', 204),
         attempt(3, 'c', 0),

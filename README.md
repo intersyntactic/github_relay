@@ -21,10 +21,13 @@ This package supplies:
   relay keeps no record of what it has seen.
 - **`RedeliverySweep`**: GitHub never redelivers a failed webhook by
   itself. The sweep lists each hook's last 71 hours of attempts and asks
-  GitHub to redeliver each delivery that no attempt delivered and whose
-  latest answer asked for another try (no answer, 408, 429, 5xx). A
-  delivery refused for what it is (401, 404, 413) gets the same answer
-  again, so it is left alone.
+  GitHub to redeliver each delivery that no attempt delivered: on every
+  pass after an answer that asked for another try (no answer, 408, 429,
+  5xx), and sparingly after any other 4xx (three attempts in all, an hour
+  apart). The sweep sees only the status, so it can't tell the relay's 404
+  from a misrouted proxy's, and a 401 during a secret rotation is the
+  config at fault, not the delivery. Redelivering is safe however often:
+  the same bytes are the same event key.
 
 ```dart
 final relay = RelayServer(

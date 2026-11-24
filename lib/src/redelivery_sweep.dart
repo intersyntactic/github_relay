@@ -76,9 +76,11 @@ enum AttemptOutcome {
   /// 408, a 429 or a 5xx: the relay asked for it again.
   worthAnotherTry,
 
-  /// Any other 4xx: refused for what it is (a signature that doesn't
-  /// hold, a wrong path). Sending the same bytes again gets the same
-  /// answer.
+  /// Any other 4xx: the relay means it as final (a signature that doesn't
+  /// hold, a wrong path). But the sweep sees only the number, so it can't
+  /// tell the relay's 404 from a misrouted proxy's, and a 401 during a
+  /// secret rotation is the relay's config being wrong, not the delivery.
+  /// So these are tried again too, sparingly: see [attemptsToRedeliver].
   refused;
 
   static AttemptOutcome of(int status) => switch (status) {
@@ -130,25 +132,45 @@ abstract interface class ListsAndRedeliversHookDeliveries {
 }
 
 /// For each delivery among [attempts] that none delivered, its latest
-/// attempt, when that attempt's answer asked for another try.
+/// attempt, when it is due again:
+///
+/// - after [AttemptOutcome.worthAnotherTry], on every pass;
+/// - after [AttemptOutcome.refused], only while the delivery has had fewer
+///   than [refusedAttempts] attempts, and only once its latest is at least
+///   [refusedSpacing] old at [now]. A misrouted deploy or a secret rotation
+///   then recovers within hours, and a delivery that really is bad stops
+///   after a few tries rather than one every pass for 71 hours.
+///
+/// Redelivering is safe however often: it only resends what GitHub itself
+/// sent, and the same bytes are the same event key.
 ///
 /// Oldest delivery first, by its first attempt: that one is nearest the
 /// end of the time GitHub will still redeliver it.
 List<HookDeliveryAttempt> attemptsToRedeliver(
-  Iterable<HookDeliveryAttempt> attempts,
-) {
+  Iterable<HookDeliveryAttempt> attempts, {
+  required DateTime now,
+  int refusedAttempts = 3,
+  Duration refusedSpacing = const Duration(hours: 1),
+}) {
   final byGuid = <String, List<HookDeliveryAttempt>>{};
   for (final a in attempts) {
     (byGuid[a.guid] ??= []).add(a);
   }
-  final due = [
+  bool due(List<HookDeliveryAttempt> tries, HookDeliveryAttempt last) =>
+      switch (last.outcome) {
+        AttemptOutcome.delivered => false,
+        AttemptOutcome.worthAnotherTry => true,
+        AttemptOutcome.refused =>
+          tries.length < refusedAttempts &&
+              now.difference(last.deliveredAt) >= refusedSpacing,
+      };
+  final dueNow = [
     for (final tries in byGuid.values)
       if (!tries.any((t) => t.outcome == AttemptOutcome.delivered))
-        if (_latest(tries) case final last
-            when last.outcome == AttemptOutcome.worthAnotherTry)
+        if (_latest(tries) case final last when due(tries, last))
           (first: _first(tries), last: last),
   ]..sort((a, b) => a.first.compareTo(b.first));
-  return [for (final d in due) d.last];
+  return [for (final d in dueNow) d.last];
 }
 
 DateTime _first(List<HookDeliveryAttempt> tries) =>
@@ -170,6 +192,8 @@ final class RedeliverySweep {
     required this.hooks,
     this.window = const Duration(hours: 71),
     this.maxPerSweep = 30,
+    this.refusedAttempts = 3,
+    this.refusedSpacing = const Duration(hours: 1),
     this._now = DateTime.now,
     this.log = _stderr,
   });
@@ -188,6 +212,11 @@ final class RedeliverySweep {
   /// others back.
   final int maxPerSweep;
 
+  /// How many attempts in all a refused delivery gets, and how long after
+  /// its latest attempt it is due again: see [attemptsToRedeliver].
+  final int refusedAttempts;
+  final Duration refusedSpacing;
+
   /// One line per hook and per redelivery: ids and statuses, never content.
   final void Function(String line) log;
 
@@ -198,7 +227,8 @@ final class RedeliverySweep {
   /// Runs one pass. A hook whose listing fails is skipped, and a
   /// redelivery GitHub refuses is logged: the next pass tries both again.
   Future<({int redelivered, int failed})> sweep() async {
-    final since = _now().toUtc().subtract(window);
+    final now = _now().toUtc();
+    final since = now.subtract(window);
     var redelivered = 0;
     var failed = 0;
     for (final hook in hooks) {
@@ -209,7 +239,12 @@ final class RedeliverySweep {
         log('sweep $hook: listing failed: $e');
         continue;
       }
-      final due = attemptsToRedeliver(attempts);
+      final due = attemptsToRedeliver(
+        attempts,
+        now: now,
+        refusedAttempts: refusedAttempts,
+        refusedSpacing: refusedSpacing,
+      );
       log(
         'sweep $hook: ${attempts.length} attempt(s), ${due.length} to redeliver',
       );
