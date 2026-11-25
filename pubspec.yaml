@@ -3,7 +3,7 @@ description: >-
   GitHub's part of an is_relay relay: the HMAC check of a webhook delivery,
   the key the docking station decides it under, and the sweep that asks
   GitHub to redeliver what failed, since GitHub never does by itself.
-version: 0.4.1
+version: 0.5.0
 repository: https://github.com/intersyntactic/github_relay
 
 environment:

@@ -1,9 +1,11 @@
 # Changelog
 
-## 0.4.1
+## 0.5.0
 
-- Onto is_relay `^0.3.0` and is_docking_station_api `^0.7.0`. No change in
-  behaviour: is_relay 0.3.0 has the same API as 0.2.0.
+- **Breaking:** onto is_relay `^0.3.0` and is_docking_station_api `^0.7.0`.
+  `githubEventSource` and `githubEventKey` hand out is_docking_station_api
+  types, so a package still on is_docking_station_api `^0.4.0` can't
+  resolve against this version. No change in behaviour.
 
 ## 0.4.0
 
