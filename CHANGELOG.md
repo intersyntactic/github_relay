@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1
+
+- Onto is_relay `^0.3.0` and is_docking_station_api `^0.7.0`. No change in
+  behaviour: is_relay 0.3.0 has the same API as 0.2.0.
+
 ## 0.4.0
 
 - Onto is_relay `^0.2.0`. `AttemptOutcome.of` reads is_relay's
