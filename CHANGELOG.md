@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.7.0
+
+- `GitHubEventTranslator`: the docking station's translator for
+  `github-event` entries. Each of these becomes `MessageSaid` in the
+  thread of its issue or pull request (`github:<owner>/<repo>#<n>`, inside
+  `github:<owner>/<repo>`):
+  - a new comment on an issue or pull request;
+  - a new issue;
+  - a new pull request.
+
+  Replies go under that issue in the REST API the delivery names. Event
+  keys are GitHub's own ids (`issue_comment.created:<comment id>`), so a
+  redelivery gets the same key even if its bytes differ. The rest is
+  `NothingToAdmit`: anything the agent's own account wrote (`agent`, by its
+  numeric user id), edits and deletes, review comments, reviews, and every
+  other event. It keeps no state.
+- `GitHubUserId`: an account's numeric id, which never changes when a
+  login is renamed.
+
 ## 0.6.0
 
 - **Breaking:** now requires is_relay `^0.4.0` and is_docking_station_api
