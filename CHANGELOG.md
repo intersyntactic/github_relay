@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0
+
+- **Breaking:** now requires is_relay `^0.4.0` and is_docking_station_api
+  `^0.8.0`. That version of is_docking_station_api takes its reply types
+  from is_conversation_reply_vocabulary, so nothing here pulls in
+  is_reply_vocabulary any more. `githubEventSource` and `githubEventKey`
+  return is_docking_station_api types, so a package still on `^0.7.0`
+  can't resolve against this version. Behaviour is unchanged.
+
 ## 0.5.0
 
 - **Breaking:** onto is_relay `^0.3.0` and is_docking_station_api `^0.7.0`.
