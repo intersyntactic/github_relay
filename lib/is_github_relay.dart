@@ -6,3 +6,4 @@ library;
 export 'src/github_delivery_check.dart';
 export 'src/github_rest_hook_deliveries.dart';
 export 'src/redelivery_sweep.dart';
+export 'src/github_event_translator.dart';
