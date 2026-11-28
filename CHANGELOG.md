@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.8.0
+
+- **Breaking:** now requires is_docking_station_api `^0.9.0`, is_relay
+  `^0.6.0` and checked_json `^0.3.0`. The translator's `UserSaid`,
+  `SourceMessageId` and `RepliesUnderWebAddress` now come from
+  is_conversation_vocabulary `^0.1.1`, which replaces is_conversation_shapes
+  and is_conversation_reply_vocabulary. Neither of those is a dependency any
+  more.
+- `GitHubEventTranslator` now treats a body that names a key twice as
+  `NothingToAdmit`. checked_json 0.3.0 refuses such a body, where `jsonDecode`
+  silently kept the last value.
+- The redelivery sweep still reads GitHub's listing with `jsonDecode`.
+  checked_json's decoder refuses integers past 2^53, and every delivery id
+  GitHub hands out is one, such as 3856380378147192832.
+- No container image any more: intersyntactic/infra deploys from a tagged
+  release. The Dockerfile and the GHCR publish job are gone. CI runs
+  analysis and tests on pushes and pull requests.
+
 ## 0.7.0
 
 - `GitHubEventTranslator`: the docking station's translator for

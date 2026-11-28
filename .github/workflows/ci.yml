@@ -1,0 +1,20 @@
+name: ci
+
+# Analysis and tests. intersyntactic/infra deploys a tagged release from
+# source, so nothing here builds or publishes an artifact.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+      - run: dart pub get
+      - run: dart analyze --fatal-infos
+      - run: dart test

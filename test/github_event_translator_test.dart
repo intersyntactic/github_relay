@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:is_content_id/is_content_id.dart' show ObjectId;
-import 'package:is_conversation_reply_vocabulary/is_conversation_reply_vocabulary.dart';
+import 'package:is_conversation_vocabulary/is_conversation_vocabulary.dart';
 import 'package:is_docking_station_api/is_docking_station_api.dart';
 import 'package:is_github_relay/is_github_relay.dart';
 import 'package:is_web_address_vocabulary/is_web_address_vocabulary.dart';
@@ -277,6 +277,20 @@ void main() {
         reason: url,
       );
     }
+  });
+
+  test('a body naming a key twice is nothing to admit', () {
+    // jsonDecode keeps the last `body`; checked_json refuses the object, so
+    // no one can hide one comment behind another inside a signed body.
+    final twice = jsonEncode(issueComment()).replaceFirst(
+      '"body":"Can you look at the failing build?"',
+      '"body":"shown","body":"Can you look at the failing build?"',
+    );
+    expect(twice, contains('"body":"shown"'));
+    expect(
+      translator.step(null, recordedBytes(utf8.encode(twice))).$2,
+      isA<NothingToAdmit>(),
+    );
   });
 
   test('a user id must be positive', () {

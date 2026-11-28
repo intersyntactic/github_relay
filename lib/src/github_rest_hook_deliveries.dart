@@ -113,6 +113,9 @@ final class GitHubRestHookDeliveries
 
   /// [body], a page of the listing.
   static List<HookDeliveryAttempt> _attempts(String body) {
+    // Not checked_json's decoder: it refuses integers past 2^53, and every
+    // delivery id GitHub lists is one (3856380378147192832). This runs only
+    // on the VM, whose int holds them exactly.
     final decoded = switch (jsonDecode(body)) {
       final List<Object?> items => items,
       _ => throw const GitHubApiException('a listing that is not a list'),
