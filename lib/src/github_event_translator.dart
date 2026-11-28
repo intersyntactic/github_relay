@@ -34,6 +34,51 @@ final class GitHubUserId {
   String toString() => 'GitHubUserId($value)';
 }
 
+/// A GitHub App's slug, the name its bot is mentioned by: `@<slug>`, its bot
+/// login being `<slug>[bot]`. Letters, digits and hyphens, compared
+/// without case, as GitHub compares logins.
+final class GitHubAppSlug {
+  const GitHubAppSlug._(this.value);
+
+  /// Lower case.
+  final String value;
+
+  /// [s] as a slug, or null unless it is one.
+  static GitHubAppSlug? parse(String s) =>
+      _slug.hasMatch(s) ? GitHubAppSlug._(s.toLowerCase()) : null;
+
+  static final _slug = RegExp(r'^[A-Za-z0-9][A-Za-z0-9-]*$');
+
+  /// Whether [text] mentions this App: `@<slug>` or `@<slug>[bot]` as a
+  /// whole word, outside code and quoted lines. Not inside an address such
+  /// as `a@slug.io` or a path, and not where the name runs on, as in
+  /// `@slug-two`.
+  bool isMentionedIn(String text) =>
+      _mention.hasMatch(_withoutCodeOrQuotes(text));
+
+  RegExp get _mention => RegExp(
+    '(?<![A-Za-z0-9_.\\-/@])@${RegExp.escape(value)}(?![A-Za-z0-9_\\-]|\\.[A-Za-z0-9])',
+    caseSensitive: false,
+  );
+
+  /// [text] without fenced blocks, code spans and `>` quoted lines, where
+  /// an `@name` is shown or quoted rather than said.
+  static String _withoutCodeOrQuotes(String text) => text
+      .replaceAll(RegExp(r'^\s*(```|~~~)[\s\S]*?^\s*\1', multiLine: true), ' ')
+      .replaceAll(RegExp(r'`[^`\n]*`'), ' ')
+      .replaceAll(RegExp(r'^\s*>.*$', multiLine: true), ' ');
+
+  @override
+  bool operator ==(Object other) =>
+      other is GitHubAppSlug && other.value == value;
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  String toString() => 'GitHubAppSlug($value)';
+}
+
 /// The GitHub relay's translator, for the docking station: what each
 /// delivery the relay recorded is, in the docking station's terms.
 ///
@@ -67,12 +112,21 @@ final class GitHubUserId {
 ///
 /// [AddressedEvent.addressedTo] is null: a repository's webhook is sent to
 /// no account GitHub vouches for.
+///
+/// GitHub delivers everyone's messages, so each is
+/// [WhetherForTheAgent.mentionsTheAgent] when it mentions [agentSlug] and
+/// [WhetherForTheAgent.neitherMentionsNorRepliesToTheAgent] otherwise. A
+/// thread the agent has posted in isn't followed: only a mention is for it.
 final class GitHubEventTranslator implements TranslatesRelayedEvents<Null> {
-  const GitHubEventTranslator({required this.agent});
+  const GitHubEventTranslator({required this.agent, required this.agentSlug});
 
   /// The account the agent writes on GitHub as, whose own messages are
-  /// never admitted.
+  /// never admitted. Its id, not its login, so renaming the App can't let
+  /// the agent answer itself.
   final GitHubUserId agent;
+
+  /// The agent's App, by the name people mention it by.
+  final GitHubAppSlug agentSlug;
 
   @override
   RelayedEventSource get source => githubEventSource;
@@ -96,7 +150,10 @@ final class GitHubEventTranslator implements TranslatesRelayedEvents<Null> {
     if (said == null || said.author == agent) {
       return (null, const NothingToAdmit());
     }
-    return (null, said.event ?? const NothingToAdmit());
+    final forTheAgent = agentSlug.isMentionedIn(said.text)
+        ? WhetherForTheAgent.mentionsTheAgent
+        : WhetherForTheAgent.neitherMentionsNorRepliesToTheAgent;
+    return (null, said.event(forTheAgent) ?? const NothingToAdmit());
   }
 }
 
@@ -221,7 +278,7 @@ final class _GitHubSaid {
 
   /// This as the docking station's event, or null when a part of it isn't
   /// one the docking station takes.
-  MessageSaid? get event {
+  MessageSaid? event(WhetherForTheAgent forTheAgent) {
     final address = AddressInExternalSystem.parse('github:$repository#$number');
     final key = EventKey.parse(this.key);
     final source = SourceMessageId.parse(this.source);
@@ -243,6 +300,7 @@ final class _GitHubSaid {
       addressedTo: null,
       replyEndpoint: RepliesUnderWebAddress(AddressPrefix.of(origin, thread)),
       conversationKind: kind,
+      forTheAgent: forTheAgent,
       key: key,
       node: UserSaid(author: author.actor, source: source, text: text),
     );

@@ -9,7 +9,8 @@ import 'package:is_web_address_vocabulary/is_web_address_vocabulary.dart';
 import 'package:test/test.dart';
 
 final agent = GitHubUserId.parse(260000001)!;
-final translator = GitHubEventTranslator(agent: agent);
+final slug = GitHubAppSlug.parse('intersyntactic-agent')!;
+final translator = GitHubEventTranslator(agent: agent, agentSlug: slug);
 const person = 1144884;
 
 /// [bytes] as the relay records them, read back from its `github-event`
@@ -329,6 +330,68 @@ void main() {
     test('neither, or a visibility it does not know, is not known', () {
       expect(kindWith({}), ConversationKind.notKnown);
       expect(kindWith({'visibility': 'secret-ish'}), ConversationKind.notKnown);
+    });
+  });
+
+  group('for the agent', () {
+    WhetherForTheAgent forTheAgent(String body) =>
+        (translate(issueComment(body: body)) as MessageSaid).forTheAgent;
+    const mentions = WhetherForTheAgent.mentionsTheAgent;
+    const neither = WhetherForTheAgent.neitherMentionsNorRepliesToTheAgent;
+
+    test('a mention of the App is for it, by slug or bot login, any case', () {
+      expect(forTheAgent('@intersyntactic-agent can you look?'), mentions);
+      expect(forTheAgent('thanks @Intersyntactic-Agent[bot]'), mentions);
+      expect(forTheAgent('(cc @intersyntactic-agent)'), mentions);
+      expect(forTheAgent('over to you, @intersyntactic-agent.'), mentions);
+      expect(forTheAgent('first line\n@intersyntactic-agent second'), mentions);
+    });
+
+    test('anything else is neither, even with the name in it', () {
+      expect(forTheAgent('Can you look at the failing build?'), neither);
+      expect(forTheAgent('intersyntactic-agent without the @'), neither);
+      expect(forTheAgent('mail me@intersyntactic-agent.io'), neither);
+      expect(forTheAgent('@intersyntactic-agent-two please'), neither);
+      expect(forTheAgent('see enspyrco/@intersyntactic-agent'), neither);
+    });
+
+    test('a mention shown in code or quoted is not said', () {
+      expect(forTheAgent('run `@intersyntactic-agent help`'), neither);
+      expect(
+        forTheAgent('```\n@intersyntactic-agent\n```\nnothing else'),
+        neither,
+      );
+      expect(forTheAgent('> @intersyntactic-agent fix it\n\nagreed'), neither);
+      expect(
+        forTheAgent(
+          '> @intersyntactic-agent fix it\n\n@intersyntactic-agent yes, please',
+        ),
+        mentions,
+      );
+    });
+
+    test('a new issue or pull request mentions it in its title or body', () {
+      final said = translate({
+        ...opened('issue'),
+        'issue': {
+          ...(opened('issue')['issue']! as Map<String, Object?>),
+          'title': '@intersyntactic-agent crash',
+        }, // cast-ok: built by opened()
+      }) as MessageSaid;
+      expect(said.forTheAgent, mentions);
+      expect(
+        (translate(opened('pull_request')) as MessageSaid).forTheAgent,
+        neither,
+      );
+    });
+
+    test('a slug is letters, digits and hyphens, not starting with one', () {
+      expect(GitHubAppSlug.parse('intersyntactic-agent'), isNotNull);
+      expect(GitHubAppSlug.parse('Agent2'), GitHubAppSlug.parse('agent2'));
+      expect(GitHubAppSlug.parse(''), isNull);
+      expect(GitHubAppSlug.parse('-agent'), isNull);
+      expect(GitHubAppSlug.parse('agent bot'), isNull);
+      expect(GitHubAppSlug.parse('agent[bot]'), isNull);
     });
   });
 
