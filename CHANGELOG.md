@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.10.0
+
+- **Breaking:** now requires is_docking_station_api `^0.11.0` and is_relay
+  `^0.8.0`.
+- **Breaking:** `GitHubEventTranslator` takes `agentSlug`, a
+  `GitHubAppSlug`, beside `agent`. Each `MessageSaid` now carries
+  `forTheAgent`:
+  - `mentionsTheAgent` when its text says `@<slug>` (or `@<slug>[bot]`)
+    as a whole word, in any case;
+  - `neitherMentionsNorRepliesToTheAgent` otherwise.
+
+  A mention counts only when it is said. One inside an address such as
+  `a@slug.io` or a path, in a code span or fenced block, or on a `>`
+  quoted line doesn't count. A thread the agent has posted in isn't
+  followed: only a mention starts a turn (Nick, 2026-11-28).
+- `GitHubAppSlug`: letters, digits and hyphens, not starting with one,
+  compared without case.
+
 ## 0.9.0
 
 - **Breaking:** now requires is_docking_station_api `^0.10.0`, is_relay
