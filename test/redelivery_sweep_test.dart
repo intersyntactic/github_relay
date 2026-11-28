@@ -405,6 +405,17 @@ void main() {
       expect(lines.single, contains('stopped at 1 pages'));
     });
 
+    test('refuses a listing that names a key twice', () async {
+      answer = (req) => req.response.write(
+        '[{"id":1,"guid":"a","delivered_at":"${now.toIso8601String()}",'
+        '"status_code":503,"status_code":200}]',
+      );
+      await expectLater(
+        github.attemptsSince(hook, now.subtract(const Duration(hours: 1))),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
     test('throws on a listing GitHub refuses', () async {
       answer = (req) => req.response.statusCode = 404;
       await expectLater(

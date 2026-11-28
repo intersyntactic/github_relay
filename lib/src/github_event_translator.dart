@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:checked_json/checked_json.dart';
 import 'package:is_conversation_vocabulary/is_conversation_vocabulary.dart'
-    show RepliesUnderWebAddress, SourceMessageId, UserSaid;
+    show ConversationKind, RepliesUnderWebAddress, SourceMessageId, UserSaid;
 import 'package:is_docking_station_api/is_docking_station_api.dart';
 import 'package:is_shapes/is_shapes.dart' show ActorId;
 import 'package:is_web_address_vocabulary/is_web_address_vocabulary.dart'
@@ -82,9 +82,9 @@ final class GitHubEventTranslator implements TranslatesRelayedEvents<Null> {
 
   @override
   (Null, TranslatedEvent) step(Null state, RelayedEvent recorded) {
-    final GitHubSaid? said;
+    final _GitHubSaid? said;
     try {
-      said = GitHubSaid.fromJson(
+      said = _GitHubSaid.fromJson(
         JsonObject.decode(utf8.decode(recorded.bytes)),
       );
     } on FormatException {
@@ -102,8 +102,8 @@ final class GitHubEventTranslator implements TranslatesRelayedEvents<Null> {
 
 /// What a new issue, pull request or comment says, read from a delivery's
 /// body.
-final class GitHubSaid {
-  const GitHubSaid._({
+final class _GitHubSaid {
+  const _GitHubSaid._({
     required this.repository,
     required this.apiRepository,
     required this.number,
@@ -111,16 +111,18 @@ final class GitHubSaid {
     required this.source,
     required this.author,
     required this.text,
+    required this.kind,
   });
 
   /// The delivery [json] as something said, or null when it is some other
   /// event. Throws [FormatException] when it has the shape of one but a
   /// field of it doesn't.
-  static GitHubSaid? fromJson(JsonObject json) {
+  static _GitHubSaid? fromJson(JsonObject json) {
     final action = json.stringOrNull('action');
     final repo = json.objectOrNull('repository');
     if (action == null || repo == null) return null;
     final fullName = repo.string('full_name');
+    final kind = _kindOf(repo);
     final apiRepository = Uri.tryParse(repo.string('url'));
     // Checked here, since Uri.origin throws a StateError, not a
     // FormatException, on anything but an http(s) address.
@@ -139,7 +141,7 @@ final class GitHubSaid {
       case ('created', final comment?, final issue?, null, false):
         final number = issue.integer('number');
         final id = comment.integer('id');
-        return GitHubSaid._(
+        return _GitHubSaid._(
           repository: fullName,
           apiRepository: apiRepository,
           number: number,
@@ -147,26 +149,28 @@ final class GitHubSaid {
           source: '$fullName/issues/comments/$id',
           author: _author(comment),
           text: comment.stringOrNull('body') ?? '',
+          kind: kind,
         );
       case ('opened', null, final issue?, null, false):
-        return _opened(fullName, apiRepository, 'issues', issue);
+        return _opened(fullName, apiRepository, kind, 'issues', issue);
       case ('opened', null, null, final pull?, false):
-        return _opened(fullName, apiRepository, 'pull_request', pull);
+        return _opened(fullName, apiRepository, kind, 'pull_request', pull);
       default:
         return null;
     }
   }
 
-  static GitHubSaid _opened(
+  static _GitHubSaid _opened(
     String fullName,
     Uri apiRepository,
+    ConversationKind kind,
     String event,
     JsonObject opened,
   ) {
     final number = opened.integer('number');
     final body = opened.stringOrNull('body') ?? '';
     final title = opened.string('title');
-    return GitHubSaid._(
+    return _GitHubSaid._(
       repository: fullName,
       apiRepository: apiRepository,
       number: number,
@@ -174,8 +178,23 @@ final class GitHubSaid {
       source: '$fullName/issues/$number',
       author: _author(opened),
       text: body.isEmpty ? title : '$title\n\n$body',
+      kind: kind,
     );
   }
+
+  /// A public repository's threads anyone on GitHub may find and read; a
+  /// private or internal one's only those it lets in. GitHub Enterprise
+  /// sends `visibility`; older payloads carry only `private`.
+  static ConversationKind _kindOf(JsonObject repo) => switch ((
+    repo.stringOrNull('visibility'),
+    repo.booleanOrNull('private'),
+  )) {
+    ('public', _) => ConversationKind.publicChannel,
+    ('private' || 'internal', _) => ConversationKind.privateChannel,
+    (null, false) => ConversationKind.publicChannel,
+    (null, true) => ConversationKind.privateChannel,
+    _ => ConversationKind.notKnown,
+  };
 
   static GitHubUserId? _author(JsonObject written) =>
       GitHubUserId.parse(written.object('user').integer('id'));
@@ -196,6 +215,9 @@ final class GitHubSaid {
   /// still positive, so in practice this is set.
   final GitHubUserId? author;
   final String text;
+
+  /// Who may read the thread, from the repository's visibility.
+  final ConversationKind kind;
 
   /// This as the docking station's event, or null when a part of it isn't
   /// one the docking station takes.
@@ -220,6 +242,7 @@ final class GitHubSaid {
       containingAddress: AddressInExternalSystem.parse('github:$repository'),
       addressedTo: null,
       replyEndpoint: RepliesUnderWebAddress(AddressPrefix.of(origin, thread)),
+      conversationKind: kind,
       key: key,
       node: UserSaid(author: author.actor, source: source, text: text),
     );

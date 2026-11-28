@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.9.0
+
+- **Breaking:** now requires is_docking_station_api `^0.10.0`, is_relay
+  `^0.7.0`, checked_json `^0.4.0` and is_conversation_vocabulary `^0.2.0`.
+- `GitHubEventTranslator` gives each `MessageSaid` its `conversationKind`,
+  read from the repository's `visibility`, or from `private` when there is
+  no `visibility`:
+  - `public` is `publicChannel`;
+  - `private` and `internal` are `privateChannel`;
+  - anything else is `notKnown`.
+- The redelivery sweep reads GitHub's listing with checked_json's decoder,
+  taking `id` as its exact digits (`integerFieldsAsStrings`). A listing
+  that names a key twice is now refused.
+- **Breaking:** `GitHubSaid` is private. It was meant to be in 0.7.0;
+  `GitHubEventTranslator` and `GitHubUserId` are the public API.
+
 ## 0.8.0
 
 - **Breaking:** now requires is_docking_station_api `^0.9.0`, is_relay

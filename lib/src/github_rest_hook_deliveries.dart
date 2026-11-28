@@ -113,10 +113,13 @@ final class GitHubRestHookDeliveries
 
   /// [body], a page of the listing.
   static List<HookDeliveryAttempt> _attempts(String body) {
-    // Not checked_json's decoder: it refuses integers past 2^53, and every
-    // delivery id GitHub lists is one (3856380378147192832). This runs only
-    // on the VM, whose int holds them exactly.
-    final decoded = switch (jsonDecode(body)) {
+    // Every delivery id GitHub lists is past 2^53 (3856380378147192832), so
+    // `id` comes back as its exact digits; HookDeliveryAttempt.fromJson
+    // parses them into the VM's 64-bit int.
+    final decoded = switch (decodeJsonRefusingDuplicateKeysAndUnsafeIntegers(
+      body,
+      integerFieldsAsStrings: const {'id'},
+    )) {
       final List<Object?> items => items,
       _ => throw const GitHubApiException('a listing that is not a list'),
     };

@@ -39,6 +39,8 @@ Map<String, Object?> repository() => {
   'id': 700000001,
   'full_name': 'enspyrco/intersyntactic',
   'url': 'https://api.github.com/repos/enspyrco/intersyntactic',
+  'private': false,
+  'visibility': 'public',
 };
 
 Map<String, Object?> user(int id) => {
@@ -291,6 +293,43 @@ void main() {
       translator.step(null, recordedBytes(utf8.encode(twice))).$2,
       isA<NothingToAdmit>(),
     );
+  });
+
+  group("the conversation's kind follows who may read the repository", () {
+    ConversationKind kindWith(Map<String, Object?> visibility) {
+      final repo = {...repository()}
+        ..remove('private')
+        ..remove('visibility')
+        ..addAll(visibility);
+      final said =
+          translate({...issueComment(), 'repository': repo}) as MessageSaid;
+      return said.conversationKind;
+    }
+
+    test('public is a public channel', () {
+      expect(
+        kindWith({'private': false, 'visibility': 'public'}),
+        ConversationKind.publicChannel,
+      );
+    });
+    test('private and internal are private channels', () {
+      expect(
+        kindWith({'private': true, 'visibility': 'private'}),
+        ConversationKind.privateChannel,
+      );
+      expect(
+        kindWith({'private': true, 'visibility': 'internal'}),
+        ConversationKind.privateChannel,
+      );
+    });
+    test('`private` alone decides when there is no visibility', () {
+      expect(kindWith({'private': false}), ConversationKind.publicChannel);
+      expect(kindWith({'private': true}), ConversationKind.privateChannel);
+    });
+    test('neither, or a visibility it does not know, is not known', () {
+      expect(kindWith({}), ConversationKind.notKnown);
+      expect(kindWith({'visibility': 'secret-ish'}), ConversationKind.notKnown);
+    });
   });
 
   test('a user id must be positive', () {
