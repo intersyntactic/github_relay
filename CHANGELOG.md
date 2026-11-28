@@ -5,9 +5,9 @@
 - `pubspec.lock` is committed, so intersyntactic/infra can check a
   release's exact dependencies before a deploy window. Packages that
   depend on this one ignore it.
-- The lock takes checked_json 0.4.1, which refuses JSON nested past 512
-  levels with a `FormatException`, where 0.4.0 overflowed the stack. No
-  code change.
+- The lock takes checked_json 0.4.2. JSON nested past 512 levels is now
+  refused with a `FormatException`, where 0.4.0 overflowed the stack, by the
+  sweep's listing decode as well as by `JsonObject.parse`. No code change.
 - Release tags are `is_github_relay-vX.Y.Z` from now on, which
   intersyntactic/infra resolves for a root package. 0.9.0 and 0.10.0 carry
   both forms.
