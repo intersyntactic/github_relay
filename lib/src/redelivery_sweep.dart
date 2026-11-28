@@ -104,9 +104,11 @@ final class HookDeliveryAttempt {
     required this.status,
   });
 
-  /// One entry of `GET …/hooks/{id}/deliveries`.
+  /// One entry of `GET …/hooks/{id}/deliveries`, decoded with `id` as its
+  /// digits: GitHub's ids are past 2^53, which only a 64-bit int holds, and
+  /// this runs only on the VM. `int.parse` refuses one past 2^63 - 1.
   factory HookDeliveryAttempt.fromJson(JsonObject json) => HookDeliveryAttempt(
-    id: json.integer('id'),
+    id: int.parse(json.string('id')),
     guid: json.string('guid'),
     deliveredAt: DateTime.parse(json.string('delivered_at')),
     status: json.integer('status_code'),
