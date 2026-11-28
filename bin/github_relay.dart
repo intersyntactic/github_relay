@@ -10,7 +10,7 @@
 ///                              must let this user send `github-event`
 ///   PORT=8080                  optional
 ///   HOST=127.0.0.1             optional; loopback, for a proxy on this
-///                              machine. The container image binds 0.0.0.0.
+///                              machine.
 ///
 /// GitHub: payload URL `https://<host>/webhook/github`, content type
 /// application/json, any events: every authentic delivery is recorded, and

@@ -1,10 +1,8 @@
 import 'dart:convert';
 
 import 'package:checked_json/checked_json.dart';
-import 'package:is_conversation_reply_vocabulary/is_conversation_reply_vocabulary.dart'
-    show RepliesUnderWebAddress;
-import 'package:is_conversation_shapes/is_conversation_shapes.dart'
-    show SourceMessageId, UserSaid;
+import 'package:is_conversation_vocabulary/is_conversation_vocabulary.dart'
+    show RepliesUnderWebAddress, SourceMessageId, UserSaid;
 import 'package:is_docking_station_api/is_docking_station_api.dart';
 import 'package:is_shapes/is_shapes.dart' show ActorId;
 import 'package:is_web_address_vocabulary/is_web_address_vocabulary.dart'

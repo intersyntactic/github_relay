@@ -3,24 +3,23 @@ description: >-
   GitHub's part of an is_relay relay: the HMAC check of a webhook delivery,
   the key the docking station decides it under, and the sweep that asks
   GitHub to redeliver what failed, since GitHub never does by itself.
-version: 0.7.0
+version: 0.8.0
 repository: https://github.com/intersyntactic/github_relay
 
 environment:
   sdk: ^3.13.0
 
 dependencies:
-  checked_json: ^0.2.1
+  checked_json: ^0.3.0
   crypto: ^3.0.3
-  is_conversation_reply_vocabulary: ^0.1.0
-  is_conversation_shapes: ^0.8.3
-  is_docking_station_api: ^0.8.0
-  is_relay: ^0.4.0
+  is_conversation_vocabulary: ^0.1.1
+  is_docking_station_api: ^0.9.0
+  is_relay: ^0.6.0
   is_shapes: ^0.6.0
   is_web_address_vocabulary: ^0.1.2
 
 dev_dependencies:
   is_content_id: ^0.2.0
-  is_logbook_client: ^0.3.0
+  is_logbook_client: ^0.4.0
   lints: ^6.1.0
   test: ^1.33.0

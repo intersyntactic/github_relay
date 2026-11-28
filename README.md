@@ -43,15 +43,15 @@ await relay.serve(await HttpServer.bind(InternetAddress.loopbackIPv4, 8080));
 
 ## Running it
 
-Two processes from one image (`Dockerfile`):
+Two programs, each its own process. intersyntactic/infra deploys them as
+systemd units from a tagged release (`intersyntactic-github-relay/`):
 
 - `bin/github_relay.dart`, the relay. It needs `GITHUB_WEBHOOK_SECRET` and
   `LOGBOOK_SOCKET`, and the logbook's sender table must let its user write
   `github-event`. Put TLS in front, with a proxy that times out header reads
   and logs neither headers nor bodies: GitHub signs no time, so a body
   captured before it reached the relay is accepted once whenever it is sent.
-- `bin/github_redelivery_sweep.dart`, the sweep, started with
-  `--entrypoint /app/bin/github_redelivery_sweep`. It needs `GITHUB_TOKEN`
+- `bin/github_redelivery_sweep.dart`, the sweep. It needs `GITHUB_TOKEN`
   and `GITHUB_HOOKS`. It holds a GitHub token, so it never shares the
   relay's process.
 
