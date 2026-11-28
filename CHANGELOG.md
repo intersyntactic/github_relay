@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.10.1
+
+- `pubspec.lock` is committed, so intersyntactic/infra can check a
+  release's exact dependencies before a deploy window. Packages that
+  depend on this one ignore it.
+- The lock takes checked_json 0.4.2. JSON nested past 512 levels is now
+  refused with a `FormatException`, where 0.4.0 overflowed the stack, by the
+  sweep's listing decode as well as by `JsonObject.parse`. No code change.
+- Release tags are `is_github_relay-vX.Y.Z` from now on, which
+  intersyntactic/infra resolves for a root package. 0.9.0 and 0.10.0 carry
+  both forms.
+
 ## 0.10.0
 
 - **Breaking:** now requires is_docking_station_api `^0.11.0` and is_relay

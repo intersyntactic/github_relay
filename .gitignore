@@ -5,6 +5,6 @@
 # Conventional directory for build outputs.
 build/
 
-# Omit committing pubspec.lock for library packages; see
-# https://dart.dev/guides/libraries/private-files#pubspeclock.
-pubspec.lock
+# pubspec.lock is committed: intersyntactic/infra deploys this package's
+# programs from a release tag and checks the lock before a deploy window.
+# Packages that depend on this one ignore it.
